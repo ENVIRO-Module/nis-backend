@@ -129,17 +129,24 @@ class InterfaceNode:
             raise Exception(f"Invalid object type '{type(interface_or_type)}' for the first parameter. "
                             f"Valid object types are [Factor, FactorType].")
 
-        self.interface_name: str = interface_or_type.name
+        self.interface_type_name: str = self.interface_type.name
         self.processor_name: str = get_processor_name(self.processor, self.registry) if self.processor else processor_name
-        self.name: str = self.processor_name + ":" + self.interface_name + ":" + self.orientation
 
     @property
     def key(self) -> Tuple:
-        return self.processor_name, self.interface_name, self.orientation
+        return self.processor_name, self.interface_type_name, self.orientation
 
     @staticmethod
     def key_labels() -> List[str]:
-        return ["Processor", "Interface", "Orientation"]
+        return ["Processor", "InterfaceType", "Orientation"]
+
+    @property
+    def name(self) -> str:
+        return ":".join(self.key)
+
+    @property
+    def interface_name(self) -> str:
+        return self.interface.name if self.interface and self.interface.name != self.interface_type_name else ""
 
     @property
     def unit(self):
@@ -987,7 +994,8 @@ def flow_graph_solver(global_parameters: List[Parameter], problem_statement: Pro
     #
 
     data = {result_key.as_string_tuple() + node.key:
-                {"RoegenType": node.roegen_type if node else "-",
+                {"InterfaceName": node.interface_name,
+                 "RoegenType": node.roegen_type if node else "-",
                  "Value": float_computed.value.val,
                  "Computed": float_computed.computed.name,
                  "Observer": float_computed.observer,
@@ -1040,7 +1048,7 @@ def export_solver_data(datasets, data, dynamic_scenario, glb_idx, global_paramet
     df = df.round(3)
     # Give a name to the dataframe indexes
     index_names = [f.title() for f in
-                   ResultKey._fields] + InterfaceNode.key_labels()  # "Processor", "Interface", "Orientation"
+                   ResultKey._fields] + InterfaceNode.key_labels()  # "Processor", "InterfaceType", "Orientation"
     df.index.names = index_names
     # Sort the dataframe based on indexes. Not necessary, only done for debugging purposes.
     df = df.sort_index(level=index_names)
@@ -1185,12 +1193,12 @@ def prepare_sankey_dataset(registry: PartialRetrievalDictionary, df: pd.DataFram
     df2 = df.reset_index()
     processor = df2["Processor"].apply(lambda x: x.split("."))
     df2["lastprocessor"] = [i[-1] for i in processor]
-    df2["source"] = df2["lastprocessor"] + ":" + df2["Interface"]
+    df2["source"] = df2["lastprocessor"] + ":" + df2["InterfaceType"]
     # df2 = df2[df2["Orientation"]=="Output"] It is not necessary?
 
     ds_flow_values = pd.merge(df2, ds_flows, on="source")
     ds_flow_values = ds_flow_values.drop(
-        columns=["Orientation", "lastprocessor", "Processor", "Interface", 'RoegenType'], axis=1)
+        columns=["Orientation", "lastprocessor", "Processor", "InterfaceType", 'RoegenType'], axis=1)
     ds_flow_values = ds_flow_values.rename(
         columns={'Sphere': 'Sphere_source', 'System': 'System_source', 'Subsystem': 'Subsystem_source'})
     # ds_flow_values.reset_index()
@@ -1211,7 +1219,7 @@ def get_conflicts_filtered_dataframe(in_df: pd.DataFrame) -> pd.DataFrame:
 def inplace_case_sensitiveness_dataframe(df: pd.DataFrame):
     if not case_sensitive:
         level_processor = df.index._get_level_number("Processor")
-        level_interface = df.index._get_level_number("Interface")
+        level_interface = df.index._get_level_number("InterfaceType")
         df.index.set_levels([df.index.levels[level_processor].str.lower(),
                              df.index.levels[level_interface].str.lower()],
                             level=[level_processor, level_interface],
@@ -1268,7 +1276,7 @@ def calculate_local_scalar_indicators(indicators: List[Indicator],
             d = {}
             # Iterate through available values in a single processor
             for row, sdf in g.iterrows():
-                iface = sdf["Interface"]
+                iface = sdf["InterfaceType"]
                 iface_orientation = iface + "_" + sdf["Orientation"]
                 if iface_orientation in d:
                     print(f"{iface_orientation} found to already exist!")
@@ -1293,7 +1301,7 @@ def calculate_local_scalar_indicators(indicators: List[Indicator],
         return df2
 
     # -- calculate_local_scalar_indicators --
-    idx_to_change = ["Interface", "Orientation"]
+    idx_to_change = ["InterfaceType", "Orientation"]
     results.reset_index(idx_to_change, inplace=True)
 
     # For each ScalarIndicator...
@@ -1564,7 +1572,7 @@ def prepare_matrix_indicators(indicators: List[MatrixIndicator],
             if not case_sensitive:
                 ifaces = set([_.lower() for _ in ifaces])
 
-            i_names = get_adapted_case_dataframe_filter(results, "Interface", ifaces)
+            i_names = get_adapted_case_dataframe_filter(results, "InterfaceType", ifaces)
             # i_names = results.index.unique(level="Interface").values
             # i_names_case = [_ if case_sensitive else _.lower() for _ in i_names]
             # i_names_corr = dict(zip(i_names_case, i_names))
@@ -1582,7 +1590,7 @@ def prepare_matrix_indicators(indicators: List[MatrixIndicator],
         idx_columns = ["Scenario", "Period", "Processor"]
         if indicator.scope:
             idx_columns.append("Scope")
-        df = df.pivot_table(values="Value", index=idx_columns, columns=["Interface", "Orientation"])
+        df = df.pivot_table(values="Value", index=idx_columns, columns=["InterfaceType", "Orientation"])
         # Flatten columns, concatenating levels
         df.columns = [f"{x} {y}" for x, y in zip(df.columns.get_level_values(0), df.columns.get_level_values(1))]
 
@@ -1699,7 +1707,7 @@ def get_eum_dataset(dataframe: pd.DataFrame) -> "Dataset":
         ']'
     )
 
-    df = df.pivot_table(values="Value", index=["Scenario", "Period", "Processor", "Level"], columns="Interface")
+    df = df.pivot_table(values="Value", index=["Scenario", "Period", "Processor", "Level"], columns="InterfaceType")
 
     # Adding units to column name
     # TODO: remove hardcoded

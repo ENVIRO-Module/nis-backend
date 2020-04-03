@@ -1638,7 +1638,8 @@ class Factor(Identifiable, Nameable, Taggable, Qualifiable, Observable, Automata
         return f
 
     @staticmethod
-    def partial_key(processor: Processor=None, factor_type: FactorType=None, name: str=None, ident=None):
+    def partial_key(processor: Processor=None, factor_type: FactorType=None, name: str=None, ident=None,
+                    orientation=None):
         d = {"_t": "f"}
         if processor:
             d["__p"] = processor.ident
@@ -1648,6 +1649,8 @@ class Factor(Identifiable, Nameable, Taggable, Qualifiable, Observable, Automata
             d["_n"] = name
         if ident:
             d["__id"] = ident
+        if orientation:
+            d["_o"] = orientation
 
         return d
 
@@ -1656,7 +1659,8 @@ class Factor(Identifiable, Nameable, Taggable, Qualifiable, Observable, Automata
         Return a Key for the identification of the Factor in the registry
         :return:
         """
-        return {"_t": "f", "__id": self.ident, "__p": self._processor.ident, "__ft": self._taxon.ident, "_n": self.name}
+        return {"_t": "f", "__id": self.ident, "__p": self._processor.ident, "__ft": self._taxon.ident, "_n": self.name,
+                "_o": self.orientation}
 
 
 class ProcessorsSet(Nameable):

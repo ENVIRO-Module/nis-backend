@@ -28,6 +28,7 @@ Before the elaboration of flow graphs, several preparatory steps:
 from collections import defaultdict
 from copy import deepcopy
 from enum import Enum
+from itertools import chain
 from typing import Dict, List, Set, Any, Tuple, Union, Optional, NamedTuple, Generator, NoReturn, Sequence
 
 import lxml
@@ -231,11 +232,13 @@ class ResultKey(NamedTuple):
     scenario: str
     period: str
     scope: Scope
+    conflict_flow: ConflictResolution = ConflictResolution.No
     conflict_partof: ConflictResolution = ConflictResolution.No
     conflict_itype: ConflictResolution = ConflictResolution.No
 
-    def as_string_tuple(self) -> Tuple[str, str, str, str, str]:
-        return self.scenario, self.period, self.scope.name, self.conflict_partof.name, self.conflict_itype.name
+    def as_string_tuple(self) -> Tuple[str, str, str, str, str, str]:
+        return self.scenario, self.period, self.scope.name, \
+               self.conflict_flow.name, self.conflict_partof.name, self.conflict_itype.name
 
 
 ProcessorsRelationWeights = Dict[Tuple[Processor, Processor], Any]
@@ -460,10 +463,10 @@ def split_observations_by_relativeness(observations_by_time: TimeObservationsTyp
     return observations_by_time_norelative, observations_by_time_relative
 
 
-def compute_graph_results(comp_graph: ComputationGraph,
-                          existing_results: NodeFloatComputedDict,
-                          previous_known_nodes: Set[InterfaceNode],
-                          computation_source: ComputationSource) -> NodeFloatComputedDict:
+def compute_graph_results(comp_graph: ComputationGraph, existing_results: NodeFloatComputedDict,
+                          previous_known_nodes: Set[InterfaceNode], computation_source: ComputationSource,
+                          raise_error_on_conflicts=True) \
+        -> Tuple[NodeFloatComputedDict, NodeFloatComputedDict, NodeFloatComputedDict]:
     # Filter results in graph
     graph_params: NodeFloatDict = {k: v.value for k, v in existing_results.items() if k in comp_graph.nodes}
 
@@ -472,7 +475,7 @@ def compute_graph_results(comp_graph: ComputationGraph,
 
     if len(compute_nodes) == 0:
         print("All nodes have a value. Nothing to solve.")
-        return {}
+        return {}, {}, {}
 
     print(f"****** NODES: {comp_graph.nodes}")
     print(f"****** UNKNOWN NODES: {compute_nodes}")
@@ -480,7 +483,8 @@ def compute_graph_results(comp_graph: ComputationGraph,
     new_computed_nodes: Set[InterfaceNode] = {k for k in existing_results if k not in previous_known_nodes}
     conflicts = comp_graph.compute_conflicts(new_computed_nodes, previous_known_nodes)
 
-    raise_error_if_conflicts(conflicts, graph_params, comp_graph.name)
+    if raise_error_on_conflicts:
+        raise_error_if_conflicts(conflicts, graph_params, comp_graph.name)
 
     results, _ = comp_graph.compute_values(compute_nodes, graph_params)
 
@@ -491,7 +495,7 @@ def compute_graph_results(comp_graph: ComputationGraph,
             # v.name = k.name
             return_values[k] = FloatComputedTuple(v, Computed.Yes, computation_source=computation_source)
 
-    return return_values
+    return return_values, {}, {}
 
 
 def raise_error_if_conflicts(conflicts: Dict[InterfaceNode, Set[InterfaceNode]], graph_params: NodeFloatDict, graph_name: str):
@@ -1058,6 +1062,8 @@ def flow_graph_solver(global_parameters: List[Parameter], problem_statement: Pro
                 print(f"********************* TIME PERIOD: {time_period}")
 
                 aggregations: NodeFloatComputedDict = {}
+                total_flow_taken_results: NodeFloatComputedDict = {}
+                total_flow_dismissed_results: NodeFloatComputedDict = {}
                 total_itype_taken_results: NodeFloatComputedDict = {}
                 total_itype_dismissed_results: NodeFloatComputedDict = {}
                 total_partof_taken_results: NodeFloatComputedDict = {}
@@ -1095,15 +1101,23 @@ def flow_graph_solver(global_parameters: List[Parameter], problem_statement: Pro
                             print(f"********************* Solving iteration: {iteration_number}")
                             previous_len_results = len(results)
 
-                            new_results = compute_graph_results(comp_graph_flow, results, flow_last_known_nodes, ComputationSource.Flow)
+                            new_results, flow_taken_results, flow_dismissed_results = \
+                                compute_graph_results(comp_graph_flow, results,
+                                                      flow_last_known_nodes, ComputationSource.Flow)
                             results.update(new_results)
                             flow_last_known_nodes = set(results.keys())
+                            total_flow_taken_results.update(flow_taken_results)
+                            total_flow_dismissed_results.update(flow_dismissed_results)
 
-                            new_results = compute_graph_results(comp_graph_scale, results, scale_last_known_nodes, ComputationSource.Scale)
+                            new_results, _, _ = compute_graph_results(comp_graph_scale, results,
+                                                                      scale_last_known_nodes,
+                                                                      ComputationSource.Scale)
                             results.update(new_results)
                             scale_last_known_nodes = set(results.keys())
 
-                            new_results = compute_graph_results(comp_graph_scale_change, results, scale_change_last_known_nodes, ComputationSource.ScaleChange)
+                            new_results, _, _ = compute_graph_results(comp_graph_scale_change, results,
+                                                                      scale_change_last_known_nodes,
+                                                                      ComputationSource.ScaleChange)
                             results.update(new_results)
                             scale_change_last_known_nodes = set(results.keys())
 
@@ -1152,7 +1166,11 @@ def flow_graph_solver(global_parameters: List[Parameter], problem_statement: Pro
 
                     # Filter out conflicted results from TOTAL results
                     current_results[result_key] = {k: v for k, v in results.items()
-                                                   if k not in total_itype_taken_results and k not in total_partof_taken_results}
+                                                   if k not in chain(total_flow_taken_results, total_itype_taken_results, total_partof_taken_results)}
+
+                    if total_flow_taken_results:
+                        current_results[result_key._replace(conflict_flow=ConflictResolution.Taken)] = total_flow_taken_results
+                        current_results[result_key._replace(conflict_flow=ConflictResolution.Dismissed)] = total_flow_dismissed_results
 
                     if total_itype_taken_results:
                         current_results[result_key._replace(conflict_itype=ConflictResolution.Taken)] = total_itype_taken_results
@@ -1210,7 +1228,9 @@ def flow_graph_solver(global_parameters: List[Parameter], problem_statement: Pro
 def compute_dataframe_sankey(results: ResultDict) -> pd.DataFrame:
     data: List[Dict] = []
     for result_key, node_floatcomputed_dict in results.items():
-        if result_key.scope == Scope.Total and result_key.conflict_itype != ConflictResolution.Dismissed \
+        if result_key.scope == Scope.Total \
+           and result_key.conflict_flow != ConflictResolution.Dismissed \
+           and result_key.conflict_itype != ConflictResolution.Dismissed \
            and result_key.conflict_partof != ConflictResolution.Dismissed:
 
             for node, float_computed in node_floatcomputed_dict.items():
@@ -1445,7 +1465,7 @@ def export_solver_data(datasets, data, dynamic_scenario, glb_idx, global_paramet
     benchmarks = glb_idx.get(Benchmark.partial_key())
 
     # Filter out conflicts and prepare for case insensitiveness
-    # Filter: Conflict_Partof!='Dismissed', Conflic_iType!='Dismissed', and remove the two columns
+    # Filter: Conflict_Flow!='Dismissed', Conflict_Partof!='Dismissed', Conflict_iType!='Dismissed', and remove the 3 columns
     df_without_conflicts = get_conflicts_filtered_dataframe(df)
     inplace_case_sensitiveness_dataframe(df_without_conflicts)
 
@@ -1585,9 +1605,11 @@ def prepare_sankey_dataset(registry: PartialRetrievalDictionary, df: pd.DataFram
 
 
 def get_conflicts_filtered_dataframe(in_df: pd.DataFrame) -> pd.DataFrame:
-    filt = in_df.index.get_level_values("Conflict_Partof").isin(["No", "Taken"]) & in_df.index.get_level_values(
-        "Conflict_Itype").isin(["No", "Taken"])
+    filt = in_df.index.get_level_values("Conflict_Flow").isin(["No", "Taken"]) & \
+           in_df.index.get_level_values("Conflict_Partof").isin(["No", "Taken"]) & \
+           in_df.index.get_level_values("Conflict_Itype").isin(["No", "Taken"])
     df = in_df[filt]
+    df = df.droplevel("Conflict_Flow")
     df = df.droplevel("Conflict_Partof")
     df = df.droplevel("Conflict_Itype")
     return df

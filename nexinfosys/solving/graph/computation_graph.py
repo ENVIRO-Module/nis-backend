@@ -83,6 +83,15 @@ class ComputationGraph:
         if not self.graph.nodes[n].get("split"):
             self.graph.nodes[n]["split"] = [False, False]
 
+    def get_node_split(self, n: Node, graph_type: EdgeType) -> bool:
+        return self.graph.nodes[n]["split"][graph_type.value]
+
+    def get_direct_node_split(self, n: Node) -> bool:
+        return self.get_node_split(n, EdgeType.DIRECT)
+
+    def get_reverse_node_split(self, n: Node) -> bool:
+        return self.get_node_split(n, EdgeType.REVERSE)
+
     def mark_node_split(self, n: Node, graph_type: EdgeType, split: bool = True) -> None:
         """ Set the attribute 'split' to a node """
         self.graph.nodes[n]["split"][graph_type.value] = split

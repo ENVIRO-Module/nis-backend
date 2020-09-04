@@ -962,8 +962,7 @@ def compute_hierarchy_flow_results(
 
         # We avoid graphs with cycles
         if node in pending_nodes:
-            float_value = params.get(node)
-            return float_value.value if float_value is not None else None
+            return None
 
         pending_nodes.append(node)
 
@@ -1059,7 +1058,11 @@ def compute_hierarchy_aggregate_results(
                 return_value = new_computed_value.value
         else:
             # No value got from children, try to search in "params"
-            return_value = float_value.value if float_value is not None else None
+            if float_value is not None:
+                new_values[node] = float_value
+                return_value = float_value.value
+            else:
+                return_value = None
 
         return return_value
 

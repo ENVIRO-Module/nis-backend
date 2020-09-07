@@ -6,6 +6,7 @@ https://gist.github.com/cynici/5865326
 
 """
 import re
+import traceback
 from functools import partial
 
 import lxml
@@ -461,11 +462,15 @@ arith_boolean_expression << operatorPrecedence(Or([positive_float, positive_int,
                                  rpar=rparen.suppress())
 
 # RULES - Expression varying value depending on conditions
-condition = Group(arith_boolean_expression + Literal("->").suppress() + arith_boolean_expression)
+# If a condition omits the condition itself, "True" is assumed, and the result of the expression is returned. So it is recommended for the last in the list
+condition = Or([Group(arith_boolean_expression + Literal("->").suppress() + arith_boolean_expression), arith_boolean_expression])
 conditions_list << Group(conditions_opening.suppress() + delimitedList(condition, ",") + conditions_closing.suppress()).setParseAction(lambda _s, l, t:
                                                                {
                                                                    'type': 'conditions',
-                                                                   'parts': [{"type": "condition", "if": c[0], "then": c[1]} for c in t.asList()[0]]
+                                                                   'parts': [{"type": "condition", "if": c[0], "then": c[1]} if isinstance(c, list) else
+                                                                             {"type": "condition", "if": {'type': 'boolean', 'value': True}, "then": c}
+                                                                             for c in t.asList()[0]
+                                                                             ]
                                                                })
 
 # RULES - Expression type 2
@@ -749,7 +754,8 @@ if __name__ == '__main__':
         except:
             print("Incorrect")
 
-    examples = ["a * 3 >= 0.3", "?a > 5 -> 3, a> 10 -> 6?",
+    examples = ["?a > 5 -> 3, a> 10 -> 6, 8?",
+                "a * 3 >= 0.3",
                 "'Hola'",
                 "'Hola' + 'Adios'",
                 "Param * 3 >= 0.3",
@@ -764,6 +770,7 @@ if __name__ == '__main__':
             ast = string_to_ast(arith_boolean_expression, e)
             print(ast)
         except:
+            traceback.print_exc()
             print("Incorrect")
 
     s = "c1 + c30 - c2 - 10"

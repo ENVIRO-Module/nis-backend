@@ -187,7 +187,7 @@ class COMEXT(IDataSourceManager):
 
         return zip_name
 
-    def get_dataset_filtered(self, dataset, dataset_params: list) -> Dataset:
+    def get_dataset_filtered(self, dataset: str, dataset_params: list) -> Dataset:
         """ Obtains the dataset with its structure plus the filtered values
             The values can be in a pd.DataFrame or in JSONStat compact format
             After this, new dimensions can be joined, aggregations need to be performed
@@ -201,10 +201,11 @@ class COMEXT(IDataSourceManager):
         ds = self.get_dataset_structure(None, dataset)
 
         # Read full dataset into a Dataframe
-        dataframe_fn = tempfile.gettempdir() + "/" + dataset + ".bin"
+        dataframe_fn = tempfile.gettempdir() + "/" + dataset + ".bin2"
         df = None
         if os.path.isfile(dataframe_fn):
-            df = pd.read_msgpack(dataframe_fn)
+            df = pd.read_parquet(dataframe_fn)
+            # df = pd.read_msgpack(dataframe_fn)
 
         if df is None:
             zip_name = self.etl_dataset(dataset, update=False)
@@ -215,7 +216,7 @@ class COMEXT(IDataSourceManager):
                 # st = pattern.sub(lambda m: "NaN" if m.group(0) == ":" else "", gz.read().decode("utf-8"))
 
                 fc = BytesIO(st)
-            # os.remove(zip_name)  # Remove, because the dataset is stored as MSGPACK dataframe format
+            # os.remove(zip_name)  # Remove, because the dataset is stored as PARQUET dataframe format
             df = pd.read_csv(fc, dtype={"PRCCODE": "str",
                                         "DECL" if dataset.startswith("DS-066") else map_r2_r1_fields["DECL"]: "str"
                                         }
@@ -248,7 +249,8 @@ class COMEXT(IDataSourceManager):
             # Set index on the dimension columns
             df.set_index(dimensions, inplace=True)
             # Save df
-            df.to_msgpack(dataframe_fn)
+            df.to_parquet(dataframe_fn)
+            # df.to_msgpack(dataframe_fn)
 
         # Change dataframe index names to match the case of the names in the metadata
         # metadata_names_dict = {dim.code.lower(): dim.code for dim in ds.dimensions}
@@ -278,7 +280,7 @@ class COMEXT(IDataSourceManager):
 
         if dataset_params:
             obtain_periods_to_filter(dataset_params)
-            ds.data = filter_dataset_into_dataframe(df, dataset_params, eurostat_postprocessing=False)
+            ds.data = filter_dataset_into_dataframe(df, dataset_params, dataset, eurostat_postprocessing=False)
         else:
             ds.data = df
 

@@ -717,7 +717,7 @@ if __name__ == '__main__':
     s.set("Param2", 0.2)
     s.set("p1", 2.3)
 
-    ej = "level='n+1', r=[Ref2019], a=5*p1, c=?p1>3 -> 'T1', p1<=3 -> 'T2'?"
+    ej = "level='n+1', r=[Ref2019], a=5*p1, c=?p1>3 -> 'T1', p1<=2 -> 'T2', 'T3'?"
     ast = string_to_ast(key_value_list, ej)
     res, unres = ast_evaluator(ast, s, None, issues)
 

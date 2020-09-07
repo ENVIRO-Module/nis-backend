@@ -177,7 +177,7 @@ class Eurostat(IDataSourceManager):
 
         return zip_name
 
-    def get_dataset_filtered(self, dataset, dataset_params: dict) -> Dataset:
+    def get_dataset_filtered(self, dataset: str, dataset_params: dict) -> Dataset:
         """ This method has to consider the last dataset download, to re"""
 
         def multi_replace(text, rep):
@@ -189,10 +189,11 @@ class Eurostat(IDataSourceManager):
         ds = self.get_dataset_structure(None, dataset)
 
         # Read full Eurostat dataset into a Dataframe
-        dataframe_fn = tempfile.gettempdir() + "/" + dataset + ".bin"
+        dataframe_fn = tempfile.gettempdir() + "/" + dataset + ".bin2"
         df = None
         if os.path.isfile(dataframe_fn):
-            df = pd.read_msgpack(dataframe_fn)
+            df = pd.read_parquet(dataframe_fn)
+            # df = pd.read_msgpack(dataframe_fn)
 
         if df is None:
             zip_name = self.etl_dataset(dataset, update=False)
@@ -252,7 +253,8 @@ class Eurostat(IDataSourceManager):
                 # set index on the dimension columns
                 df.set_index(new_cols, inplace=True)
                 # Save df
-                df.to_msgpack(dataframe_fn)
+                df.to_parquet(dataframe_fn)
+                # df.to_msgpack(dataframe_fn)
 
         # Change dataframe index names to match the case of the names in the metadata
         # metadata_names_dict = {dim.code.lower(): dim.code for dim in ds.dimensions}
@@ -262,7 +264,7 @@ class Eurostat(IDataSourceManager):
 
         # Filter it using generic Pandas filtering capabilities
         if dataset_params:
-            ds.data = filter_dataset_into_dataframe(df, dataset_params, eurostat_postprocessing=True)
+            ds.data = filter_dataset_into_dataframe(df, dataset_params, dataset, eurostat_postprocessing=True)
         else:
             ds.data = df
 

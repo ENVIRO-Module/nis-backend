@@ -19,7 +19,7 @@ from sqlalchemy.pool import StaticPool
 # from flask import (jsonify, abort, redirect, url_for,
 #
 #                    )
-from flask import (Response, request, session as flask_session, send_from_directory
+from flask import (Response, request, session as flask_session, send_from_directory, redirect
                    )
 from flask.helpers import get_root_path
 from flask_session import Session as FlaskSessionServerSide
@@ -382,6 +382,11 @@ def after_a_request(response):
 # #####################################################################################################################
 # >>>> SERVE ANGULAR2 CLIENT FILES <<<<
 # #####################################################################################################################
+
+
+@app.route("/")
+def index():
+    return redirect(nis_client_base)
 
 
 @app.route(nis_client_base + "/", methods=["GET"])

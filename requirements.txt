@@ -38,8 +38,9 @@ redis>=2.10.6
 #redislite>=5.0.124623  # Disabled because it leads to a problem in "setup.py". It is explicitly used in the Dockerfile
 pyparsing>=2.2.0
 numpy>=1.16.0
-pandas==0.25
-pandas_datareader>=0.7.0
+pandas==1.0.3
+pandas_datareader>=0.8.1
+pyarrow==1.0.0
 pandaSDMX==0.9
 sdmx>=0.2.10
 regex>=2017.11.9

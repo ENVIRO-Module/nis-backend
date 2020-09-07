@@ -143,17 +143,18 @@ class OECD(IDataSourceManager):
 
         return fname
 
-    def get_dataset_filtered(self, dataset, dataset_params: dict) -> Dataset:
+    def get_dataset_filtered(self, dataset: str, dataset_params: dict) -> Dataset:
         """ This method has to consider the last dataset download, to re"""
 
         # Read OECD dataset structure
         ds = self.get_dataset_structure(None, dataset)
 
         # Read full OECD dataset into a Dataframe
-        dataframe_fn = tempfile.gettempdir() + "/oecd_" + dataset + ".bin"
+        dataframe_fn = tempfile.gettempdir() + "/oecd_" + dataset + ".bin2"
         df = None
         if os.path.isfile(dataframe_fn):
-            df = pd.read_msgpack(dataframe_fn)
+            df = pd.read_parquet(dataframe_fn)
+            # df = pd.read_msgpack(dataframe_fn)
 
         if df is None:
             # Read the unprocessed dataset
@@ -186,10 +187,11 @@ class OECD(IDataSourceManager):
 
             df.set_index([c for c in df.columns[:-1]], inplace=True)
             # Save it
-            df.to_msgpack(dataframe_fn)
+            df.to_parquet(dataframe_fn)
+            # df.to_msgpack(dataframe_fn)
 
         # Filter it using generic Pandas filtering capabilities
-        ds.data = filter_dataset_into_dataframe(df, dataset_params)
+        ds.data = filter_dataset_into_dataframe(df, dataset_params, dataset)
 
         return ds
 

@@ -75,7 +75,7 @@ class AdHocDatasets(IDataSourceManager):
         """
         pass
 
-    def get_dataset_filtered(self, dataset, dataset_params: List[Tuple]) -> Dataset:
+    def get_dataset_filtered(self, dataset: str, dataset_params: List[Tuple]) -> Dataset:
         """ This method has to consider the last dataset download, to re"""
         # Read dataset structure
         # TODO - CLONE "ds"
@@ -100,7 +100,7 @@ class AdHocDatasets(IDataSourceManager):
             dataset_params["year"] = years
             del dataset_params["StartPeriod"]
             del dataset_params["EndPeriod"]
-        ds.data = filter_dataset_into_dataframe(df, dataset_params)
+        ds.data = filter_dataset_into_dataframe(df, dataset_params, dataset)
 
         return ds
 

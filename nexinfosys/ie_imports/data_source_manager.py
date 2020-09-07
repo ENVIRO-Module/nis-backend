@@ -314,7 +314,7 @@ def get_dataset_structure(session_factory, source: IDataSourceManager, dataset: 
     return ds
 
 
-def filter_dataset_into_dataframe(in_df, filter_dict, eurostat_postprocessing=False):
+def filter_dataset_into_dataframe(in_df, filter_dict, dataset_name, eurostat_postprocessing=False):
     """
     Function allowing filtering a dataframe passed as input,
     using the information from "filter_dict", containing the dimension names and the list
@@ -326,6 +326,7 @@ def filter_dataset_into_dataframe(in_df, filter_dict, eurostat_postprocessing=Fa
 
     :param in_df: Input dataset, pd.DataFrame
     :param filter_dict: A dictionary with the items to keep, per dimension
+    :param dataset_name: Original dataset name (to obtain dimensions and their domains)
     :param eurostat_postprocessing: Eurostat dataframe needs special postprocessing. If True, do it
     :return: Filtered dataframe
     """
@@ -350,6 +351,34 @@ def filter_dataset_into_dataframe(in_df, filter_dict, eurostat_postprocessing=Fa
         start = int(start)
         endd = int(endd)
         columns = [str(a) for a in range(start, endd + 1)]
+
+    # Combinatorial dataset
+    dset = nexinfosys.data_source_manager.get_dataset_structure(None, dataset_name)
+    pre_combined = dict()
+    combined = dict()
+    for d in dset.dimensions:
+        if not d.is_measure:
+            if not d.is_time:
+                cl = []
+                if d.get_hierarchy():
+                    if isinstance(d.get_hierarchy, list):
+                        for v in d.get_hierarchy().codes:
+                            cl.append(v.name)
+                    else:  # Fix: codes can be in a dictionary
+                        for v in d.get_hierarchy().codes.values():
+                            cl.append(v.name)
+                pre_combined[d.code] = cl
+            else:
+                pre_combined[d.code] = columns
+    for i, k in enumerate(in_df.index.names):
+        if k in filter_dict:
+            combined[k] = filter_dict[k]
+        else:
+            combined[k] = pre_combined[k]
+
+    # To bring all possible cells, prepare a combinatorial then merge with explicit values from dataset
+    midx= pd.MultiIndex.from_product(combined.values(), names=combined.keys())
+    in_df = in_df.merge(pd.DataFrame(index=midx), left_index=True, right_index=True, how='outer').fillna(np.NaN)
 
     if not case_sensitive:
         in_df_lower = get_dataframe_copy_with_lowercase_multiindex(in_df)

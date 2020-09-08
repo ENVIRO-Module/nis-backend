@@ -1058,11 +1058,7 @@ def compute_hierarchy_aggregate_results(
                 return_value = new_computed_value.value
         else:
             # No value got from children, try to search in "params"
-            if float_value is not None:
-                new_values[node] = float_value
-                return_value = float_value.value
-            else:
-                return_value = None
+            return_value = float_value.value if float_value is not None else None
 
         return return_value
 
